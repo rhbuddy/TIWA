@@ -1,0 +1,30 @@
+name: sc6_scaled
+area_m: [60, 40]
+duration_s: 1200
+warmup_s: 60
+step_s: 1
+channels: [1, 6, 11]
+aps:
+  - {id: 0, pos: [10, 8], channel: 1}
+  - {id: 1, pos: [30, 8], channel: 6}
+  - {id: 2, pos: [50, 8], channel: 11}
+  - {id: 3, pos: [10, 20], channel: 6}
+  - {id: 4, pos: [30, 20], channel: 11}
+  - {id: 5, pos: [50, 20], channel: 1}
+  - {id: 6, pos: [10, 32], channel: 11}
+  - {id: 7, pos: [30, 32], channel: 1}
+  - {id: 8, pos: [50, 32], channel: 6}
+  - {id: 9, pos: [30, 14], channel: 1}
+groups:
+  - count: 50
+    placement: uniform
+    mobility: static
+    traffic: {type: cbr, mbps: 1.0}
+  - count: 50
+    placement: uniform
+    mobility: random_waypoint
+    speed_mps: [0.5, 1.5]
+    traffic: {type: video, mbps: 4.0}
+propagation: {pl0_db: 40, exponent: 3.0, shadow_sigma_db: 4.0, shadow_rho: 0.95, rssi_noise_db: 2.0}
+mac: {efficiency: 0.6, c_max: 0.9, tau: 0.01, retry_limit: 7}
+handover: {mode: lvap, outage_s: 0.2, dwell_s: 10, channel_change_dwell_s: 60, max_moves_per_cycle: 2}

@@ -1,0 +1,7 @@
+model: xgboost
+n_estimators: 300
+max_depth: 6
+learning_rate: 0.05
+subsample: 0.8
+early_stopping_rounds: 20
+horizons_s: [5, 10, 30]

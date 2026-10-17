@@ -1,0 +1,8 @@
+# Install after requirements.txt for the forecast-model and RL-training workflows.
+scikit-learn==1.4.2
+statsmodels==0.14.2
+torch==2.2.2
+xgboost==2.0.3
+stable-baselines3==2.3.2
+sb3-contrib==2.3.0
+tensorboard==2.16.2

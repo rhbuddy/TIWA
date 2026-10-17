@@ -1,0 +1,25 @@
+algorithm: dqn
+scenario_mix:
+  - configs/scenarios/sc1_steady.yaml
+  - configs/scenarios/sc2_mobile.yaml
+  - configs/scenarios/sc4_flash_crowd.yaml
+  - configs/scenarios/sc5_mixed.yaml
+k_max: 5
+use_forecast: false
+episode_steps: 600
+n_envs: 1
+reward: {w1: 1.0, w2: 0.5, w3: 0.2, w4: 0.3, w5: 1.0}
+dqn:
+  net_arch: [128, 128]
+  learning_rate: 1.0e-4
+  gamma: 0.95
+  buffer_size: 100000
+  learning_starts: 5000
+  batch_size: 64
+  train_freq: 4
+  target_update_interval: 1000
+  exploration_fraction: 0.3
+  exploration_final_eps: 0.05
+total_timesteps: 1500000
+eval_every: 20000
+eval_episodes: 10

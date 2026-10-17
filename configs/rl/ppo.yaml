@@ -1,0 +1,21 @@
+algorithm: ppo
+scenario_mix:
+  - configs/scenarios/sc1_steady.yaml
+  - configs/scenarios/sc2_mobile.yaml
+  - configs/scenarios/sc4_flash_crowd.yaml
+  - configs/scenarios/sc5_mixed.yaml
+k_max: 5
+use_forecast: true
+episode_steps: 600
+reward: {w1: 1.0, w2: 0.5, w3: 0.2, w4: 0.3, w5: 1.0}
+ppo:
+  net_arch: [128, 128]
+  learning_rate: 3.0e-4
+  gamma: 0.95
+  n_steps: 2048
+  batch_size: 64
+  n_epochs: 10
+  gae_lambda: 0.95
+  clip_range: 0.2
+  ent_coef: 0.01
+total_timesteps: 2000000

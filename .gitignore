@@ -1,0 +1,21 @@
+# Local Python environments and caches
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Generated, reproducible research outputs (keep configs and code under version control)
+data/
+models/
+results/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
