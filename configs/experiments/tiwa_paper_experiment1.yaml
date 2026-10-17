@@ -1,0 +1,10 @@
+# Approximate, seed-repeated reproduction of TiWA paper Experiment 1.
+# The placement and traffic ambiguities are documented in docs/paper-notes.md.
+out: results/tiwa_paper_experiment1
+scenarios:
+  - configs/scenarios/sc1_paper_aspect1.yaml
+  - configs/scenarios/sc1_paper_aspect2.yaml
+policies:
+  - client_driven
+  - tiwa_original
+seeds: {start: 200, stop: 210}

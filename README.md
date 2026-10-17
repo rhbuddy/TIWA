@@ -4,7 +4,7 @@
 
 FA-RLWA is a research prototype built from the repository's SRS and Manzoor et al.'s 2023 TiWA paper. It simulates a centrally controlled Wi-Fi network, measures the TiWA indicators, provides baseline association policies and forecast models, and exposes an association-control task as a Gymnasium environment.
 
-> This repository contains an implementation scaffold and a runnable abstract simulator. It does **not** claim that the SRS acceptance criteria have already been met: no forecaster or RL checkpoint is included, paper calibration is not yet complete, and Mininet-WiFi/ns-3 validation requires a separate Linux setup. See [`docs/limitations.md`](docs/limitations.md) and [`docs/paper-notes.md`](docs/paper-notes.md).
+> This repository contains an implementation scaffold and a runnable abstract simulator. It does **not** claim that the SRS acceptance criteria have been fully met: an exploratory, outcome-informed Experiment 1 Aspect 1 configuration falls within the SRS throughput tolerance after changing one approved parameter, but the station topology is not independently reconstructed and the full paper result, other metrics, forecast/RL acceptance, and live Mininet-WiFi/ns-3 validation remain incomplete. See [`docs/paper-reproduction-results.md`](docs/paper-reproduction-results.md), [`docs/limitations.md`](docs/limitations.md), and [`docs/paper-notes.md`](docs/paper-notes.md).
 
 ## What is implemented
 
@@ -178,7 +178,18 @@ python -m fa_rlwa.experiments.report \
   --results results/main --out results/report
 ```
 
-`configs/experiments/rl_main.yaml` is the separate RL comparison matrix. Matrix runs can be parallelized with `--jobs N`; model training is kept separate from evaluation. Reports include mean, standard deviation, percentile-bootstrap confidence intervals, paired Wilcoxon p-values, and Holm-adjusted p-values when at least two matched seeds are available.
+`configs/experiments/rl_main.yaml` is the separate RL comparison matrix. Matrix runs can be parallelized with `--jobs N`; model training is kept separate from evaluation. Reports include mean, standard deviation, percentile-bootstrap confidence intervals for paired policy differences, paired Wilcoxon p-values, and Holm-adjusted p-values when at least two matched seeds are available.
+
+The approximate, outcome-informed paper Experiment 1 topology is evaluated on a separate seed range not used during the exploratory sweep; this is fixed-configuration seed evidence, not a blind topology validation. See `docs/paper-reproduction-results.md`. Re-run it with:
+
+```bash
+python -m fa_rlwa.experiments.runner \
+  --matrix configs/experiments/tiwa_paper_experiment1.yaml \
+  --seeds 200-209 --jobs 1 --no-plots
+python -m fa_rlwa.experiments.report \
+  --results results/tiwa_paper_experiment1 \
+  --out results/tiwa_paper_experiment1/report
+```
 
 ## Optional Wi-Fi adapter preflight
 

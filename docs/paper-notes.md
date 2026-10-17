@@ -29,7 +29,7 @@ The evaluation comprises:
 - **Experiment 2:** two mobile clients move through the overlapping coverage areas, with 20 static background clients; studies RSSI/mobility behavior.
 - **Experiment 3:** two APs share a collision domain and the channel assignment behavior is examined.
 
-The paper reports that TiWA's aggregate throughput is higher than the client-driven, WiMA, and Wi-Balance comparators: its text cites +52% over the client-driven method in Experiment 1 Aspect 1 and +58% in Aspect 2; +20% aggregate throughput for the mobility experiment; and +37% over client-driven in Experiment 3 (pp. 89528–89531). The paper also reports better fairness, fewer retransmissions, and a mean decision time of 0.1889 ± 0.088 s over 60 decisions (p. 89532). These are **paper-reported outcomes, not results reproduced by this codebase**.
+The paper reports that TiWA's aggregate throughput is higher than the client-driven, WiMA, and Wi-Balance comparators: its text cites +52% over the client-driven method in Experiment 1 Aspect 1 and +58% in Aspect 2; +20% aggregate throughput for the mobility experiment; and +37% over client-driven in Experiment 3 (pp. 89528–89531). The paper also reports better fairness, fewer retransmissions, and a mean decision time of 0.1889 ± 0.088 s over 60 decisions (p. 89532). These values describe the original paper's testbed and remain the comparison reference; the repository's more limited approximate replay is reported separately in [`paper-reproduction-results.md`](paper-reproduction-results.md).
 
 ## Important ambiguities and known issues
 
@@ -44,7 +44,8 @@ The SRS resolves these ambiguities in Section 10.3 (I-1–I-7). The reproduction
 
 ## How the repository relates to the paper
 
-- `configs/scenarios/sc1_steady.yaml` through `sc3_shared_channel.yaml` represent simplified analogues of the three paper experiments.
-- The AP locations in `sc1_steady.yaml` are approximate coordinates read from Fig. 3's 15 m × 9 m floor plan; the scripted route in SC2 is likewise an approximate digitization of Fig. 4. Exact surveyed coordinates are not listed in the text.
-- The simulator follows the SRS's fast log-distance/airtime model, not the paper's testbed radio/MAC stack. Its parameters and policy outcomes require calibration before making numerical reproduction claims.
-- Mininet-WiFi/ns-3 validation is not implemented as a runnable backend in this first project version. It remains an explicit future task (see [`limitations.md`](limitations.md)).
+- `configs/scenarios/sc1_steady.yaml` through `sc3_shared_channel.yaml` represent simplified analogues of the three paper experiments. The separate `sc1_paper_aspect1.yaml` and `sc1_paper_aspect2.yaml` configurations encode one explicit approximation of Experiment 1; Table 2's count of 30 devices and Figure 3's symbols are not tied to a complete set of coordinates/counts in the article text.
+- AP locations are approximate coordinates read from Fig. 3's 15 m × 9 m floor plan; the scripted route in SC2 is likewise an approximate digitization of Fig. 4. The new station-group placement supports seeded per-AP and overlap clusters. The chosen client grouping, centers, and spreads are made explicit, but are exploratory assumptions informed by initial outcomes, not independently surveyed or fully recovered from Fig. 3.
+- The Experiment 1 replay is numerically within the SRS Aspect 1 throughput tolerance and shows higher simulated throughput/fairness and fewer retransmissions under original TiWA, but its topology selection is outcome-informed, it does not match every Figure 6 metric, and its relative-gain percentages are larger than the paper's. Treat this as provisional simulator evidence rather than a completed reproduction; see [`paper-reproduction-results.md`](paper-reproduction-results.md).
+- The simulator follows the SRS's fast log-distance/airtime model, not the paper's testbed radio/MAC stack. Its outputs are evidence for this specified model, not a physical or packet-level reproduction.
+- A Mininet-WiFi validation path is now implemented but has not been run in this environment; ns-3 validation is also outstanding. See [`limitations.md`](limitations.md).

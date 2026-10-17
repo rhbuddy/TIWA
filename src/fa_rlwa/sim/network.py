@@ -126,10 +126,16 @@ class WifiNetwork:
         """Create an STA using this network's seeded random generator."""
 
         if position is None:
-            if group.placement == "hotspot":
-                center = self.aps[self._next_sta_id % len(self.aps)].pos
-                x = float(self.rng.normal(center[0], 3.0))
-                y = float(self.rng.normal(center[1], 3.0))
+            if group.placement in {"hotspot", "per_ap", "overlap"}:
+                if group.center_m is not None:
+                    center = group.center_m
+                elif group.placement == "overlap":
+                    center_array = np.mean(np.asarray([ap.pos for ap in self.aps]), axis=0)
+                    center = (float(center_array[0]), float(center_array[1]))
+                else:
+                    center = self.aps[self._next_sta_id % len(self.aps)].pos
+                x = float(self.rng.normal(center[0], group.spread_m))
+                y = float(self.rng.normal(center[1], group.spread_m))
                 position = (
                     float(np.clip(x, 0.0, self.scenario.area_m[0])),
                     float(np.clip(y, 0.0, self.scenario.area_m[1])),

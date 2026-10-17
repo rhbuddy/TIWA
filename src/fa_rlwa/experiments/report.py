@@ -22,6 +22,7 @@ METRICS = (
     "retx_per_frame",
     "occ_mean",
     "occ_std",
+    "occ_channel_std",
     "phy_mean_mbps",
     "handovers",
     "pingpongs",
@@ -90,9 +91,11 @@ def build_report(results_dir: str | Path, output_dir: str | Path) -> tuple[Path,
                     seeds = sorted(set(left_rows) & set(right_rows))
                     if len(seeds) < 2:
                         continue
-                    p_value = paired_wilcoxon(
-                        [left_rows[seed] for seed in seeds], [right_rows[seed] for seed in seeds]
-                    )
+                    values_a = np.asarray([left_rows[seed] for seed in seeds], dtype=float)
+                    values_b = np.asarray([right_rows[seed] for seed in seeds], dtype=float)
+                    paired_differences = values_b - values_a
+                    delta_low, delta_high = bootstrap_mean_ci(paired_differences, seed=0)
+                    p_value = paired_wilcoxon(values_a, values_b)
                     raw_comparisons.append(
                         {
                             "scenario": scenario,
@@ -100,8 +103,11 @@ def build_report(results_dir: str | Path, output_dir: str | Path) -> tuple[Path,
                             "policy_a": left,
                             "policy_b": right,
                             "n_pairs": len(seeds),
-                            "mean_a": float(np.mean([left_rows[seed] for seed in seeds])),
-                            "mean_b": float(np.mean([right_rows[seed] for seed in seeds])),
+                            "mean_a": float(np.mean(values_a)),
+                            "mean_b": float(np.mean(values_b)),
+                            "mean_difference_b_minus_a": float(np.mean(paired_differences)),
+                            "difference_ci95_low": delta_low,
+                            "difference_ci95_high": delta_high,
                             "relative_improvement_pct": _relative_improvement(
                                 left_rows, right_rows, seeds
                             ),

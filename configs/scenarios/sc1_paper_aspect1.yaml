@@ -1,0 +1,32 @@
+name: tiwa_exp1_aspect1
+area_m: [15, 9]
+duration_s: 1200
+warmup_s: 60
+step_s: 1
+channels: [1, 6, 11]
+# Approximate AP coordinates digitized from the paper floor plan (Fig. 3).
+aps:
+  - {id: 0, pos: [3.5, 2.7], channel: 11}
+  - {id: 1, pos: [5.5, 7.7], channel: 6}
+  - {id: 2, pos: [11.5, 5.0], channel: 1}
+# Table 2 states 30 STAs, while Fig. 3's symbols are not mapped to individual counts
+# or coordinates in the text. This explicit 6-local/24-overlap split is a modeling
+# assumption (two local STAs/AP), not a paper-reported count. The overlap center and
+# spreads were selected in an exploratory topology sweep and are not surveyed values.
+groups:
+  - count: 6
+    placement: per_ap
+    spread_m: 0.5
+    mobility: static
+    traffic: {type: cbr, mbps: 1.0}
+  - count: 24
+    placement: overlap
+    center_m: [6.5, 6.0]
+    spread_m: 0.25
+    mobility: static
+    traffic: {type: cbr, mbps: 1.0}
+propagation: {pl0_db: 40, exponent: 3.0, shadow_sigma_db: 4.0, shadow_rho: 0.95, rssi_noise_db: 2.0}
+# eta=0.2 is the one-parameter throughput calibration described in docs/paper-reproduction-results.md.
+mac: {efficiency: 0.2, c_max: 0.9, tau: 0.01, retry_limit: 7}
+handover: {mode: lvap, outage_s: 0.2, dwell_s: 10, channel_change_dwell_s: 60, max_moves_per_cycle: 2}
+measurement_noise: true

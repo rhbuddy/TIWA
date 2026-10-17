@@ -13,10 +13,11 @@ This log complements the SRS Section 16. It records the concrete choices made in
 | DD-15 | Default forecast-aware heuristic uses EWMA/persistence unless a saved model is explicitly supplied. | This makes a forecast-baseline experiment runnable without a trained model. It is not evidence that EWMA beats a moving average or that forecasts improve RL. |
 | DD-16 | Use independent Gymnasium environments for `K_max=5` and `K_max=10`. | The SRS observation dimensions and action spaces differ. A checkpoint trained for five APs cannot be evaluated on ten APs without a matching network architecture/checkpoint. |
 | DD-17 | Keep generated data, models, and results out of Git. | These artifacts can be large and are reproducible from configs and seeds; `.gitignore` excludes `data/`, `models/`, and `results/`. |
+| DD-18 | Add an explicit, exploratory Experiment 1 layout and calibrate only the SRS-approved model parameter `eta` from 0.6 to 0.2 for an Aspect 1 throughput checkpoint. | The paper gives 30 clients and illustrates positions, but does not map all clients to coordinates or clarify how symbols correspond to the total. The assumed 6-local/24-overlap grouping and center/spreads were outcome-informed; seed 0 was used in exploration and seeds 200–209 for fixed-config paired runs. Aspect 1 is numerically within SRS tolerance, but this is provisional rather than a signed-off calibration; the relative gain is larger than the paper's and PHY/occupancy/testbed results remain unmatched. See `paper-reproduction-results.md`. |
 
 ## Open implementation work
 
-1. Calibrate the abstract simulator against the paper's Figure 6 trends without tuning more than the SRS-approved parameters (`n`, `tau`, `eta`), then record every change here.
+1. Extend the paper-derived calibration beyond the Experiment 1 throughput checkpoint: investigate the gain/PHY-rate/occupancy mismatch, validate the topology assumptions, and reproduce SC2/SC3 while continuing to vary only SRS-approved parameters (`n`, `tau`, `eta`) one at a time. The first Aspect 1 calibration and held-out evidence are recorded in DD-18 and `paper-reproduction-results.md`.
 2. Verify AP and mobile path coordinates from the paper figures or testbed documentation.
 3. Run all forecaster models and report test-set errors, including event windows.
 4. Train and compare five-seed DQN checkpoints with/without forecast input; check fairness and per-STA starvation, not just aggregate throughput.

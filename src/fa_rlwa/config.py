@@ -28,6 +28,8 @@ class StationGroupConfig:
     mobility: str = "static"
     traffic_type: str = "cbr"
     offered_mbps: float = 1.0
+    spread_m: float = 3.0
+    center_m: tuple[float, float] | None = None
     speed_mps: tuple[float, float] = (0.5, 1.5)
     scripted_path: tuple[tuple[float, float, int], ...] = ()
 
@@ -137,6 +139,12 @@ def _parse_group(raw: dict[str, Any]) -> StationGroupConfig:
         mobility=str(raw.get("mobility", "static")),
         traffic_type=traffic_type,
         offered_mbps=offered_mbps,
+        spread_m=float(raw.get("spread_m", 3.0)),
+        center_m=(
+            (float(raw["center_m"][0]), float(raw["center_m"][1]))
+            if raw.get("center_m") is not None
+            else None
+        ),
         speed_mps=(float(speed[0]), float(speed[1])),
         scripted_path=tuple((float(p[0]), float(p[1]), int(p[2])) for p in path),
     )
@@ -178,10 +186,18 @@ def validate_scenario(config: ScenarioConfig) -> None:
     if config.handover.dwell_s < 0 or config.handover.max_moves_per_cycle < 1:
         raise ValueError("Handover dwell must be non-negative and max_moves_per_cycle positive")
     for group in config.groups:
-        if group.count < 0 or group.placement not in {"uniform", "hotspot"}:
+        if group.count < 0 or group.placement not in {"uniform", "hotspot", "per_ap", "overlap"}:
             raise ValueError(
-                "Station group count must be non-negative and placement uniform/hotspot"
+                "Station group count must be non-negative and placement "
+                "uniform/hotspot/per_ap/overlap"
             )
+        if group.spread_m < 0:
+            raise ValueError("Station group spread_m must be non-negative")
+        if group.center_m is not None and not (
+            0 <= group.center_m[0] <= config.area_m[0]
+            and 0 <= group.center_m[1] <= config.area_m[1]
+        ):
+            raise ValueError("Station group center_m must lie within area_m")
         if group.mobility not in {"static", "random_waypoint", "scripted"}:
             raise ValueError(f"Unsupported mobility model {group.mobility!r}")
         if group.offered_mbps < 0:
@@ -291,6 +307,8 @@ def scenario_to_mapping(config: ScenarioConfig) -> dict[str, Any]:
                 "placement": group.placement,
                 "mobility": group.mobility,
                 "traffic": {"type": group.traffic_type, "mbps": group.offered_mbps},
+                "spread_m": group.spread_m,
+                "center_m": list(group.center_m) if group.center_m is not None else None,
                 "speed_mps": list(group.speed_mps),
                 "scripted_path": [list(point) for point in group.scripted_path],
             }

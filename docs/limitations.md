@@ -14,7 +14,7 @@ The repository is an initial end-to-end prototype, not a completed experimental 
 
 ## Not yet demonstrated / future work
 
-- **TiWA numerical reproduction:** no parameter fitting has been run against the paper's figures. The current simulator is a stylized airtime model and may not match the reported absolute throughput.
+- **TiWA numerical reproduction:** a first Experiment 1 replay changed only the SRS-approved model parameter `eta` (with `n` and `tau` fixed) and was evaluated on ten distinct seeds. Aspect 1 falls within the SRS's approximate throughput tolerance and has the expected TiWA-over-client ordering. However, the assumed STA grouping/coordinates were informed by exploratory outcomes rather than independently reconstructed from Figure 3; the relative gain is larger than the paper reports, average PHY rate does not improve, occupancy is not directly comparable, and the radio/STA coordinates are approximate. This is provisional simulator evidence, not a signed-off calibration or a reproduction of the paper's physical testbed/full result set; see `paper-reproduction-results.md`.
 - **Forecast acceptance:** no train/validation/test dataset or trained model is checked in; FCT-04/FCT-06 results remain to be measured.
 - **RL convergence:** DQN/PPO are implemented as entry points, but no model checkpoints, five-seed curves, or policy superiority claims are included.
 - **Formal 70% coverage / CI:** unit tests are supplied; coverage and static-check thresholds have not yet been measured in CI.
