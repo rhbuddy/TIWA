@@ -64,7 +64,7 @@ python -m pip install -e ".[ui]"
 python -m streamlit run src/fa_rlwa/ui/streamlit_app.py
 ```
 
-The page lets you choose a scenario and policy, optionally check a Linux Wi-Fi adapter, launch a simulation, and view/download its metrics and plots. It runs the abstract simulator only. A separate Mininet-WiFi CLI backend is available for emulated AP/client control; neither the dashboard nor the preflight directly controls physical APs or client devices.
+The page lets you choose a scenario and policy, optionally check a Linux Wi-Fi adapter, and launch a simulation. While it runs, the dashboard shows progress, current AP/client telemetry, policy requests, and network events. Afterwards, the run-details views expose the complete AP/client traces, handovers, channel changes, rejected actions, resolved configuration, and downloadable output files. It runs the abstract simulator only. A separate Mininet-WiFi CLI backend is available for emulated AP/client control; neither the dashboard nor the preflight directly controls physical APs or client devices.
 
 Run a short, reproducible baseline experiment from the CLI:
 
@@ -86,7 +86,7 @@ python -m fa_rlwa.experiments.runner \
   --policy tiwa_forecast --forecaster ewma --seed 3 --duration 600 --out results/forecast-demo
 ```
 
-A run directory contains `ap_indicators.csv`, `sta_log.csv`, `handover_log.csv`, `invalid_actions.csv`, `metrics_summary.csv`, `config_resolved.yaml`, and `figures/` with throughput, AP occupancy, and fairness plots. For the SRS-compatible default duration, omit `--duration` (1,200 seconds; first 60 seconds are excluded from summary metrics).
+A run directory contains `ap_indicators.csv`, `sta_log.csv`, `handover_log.csv`, `channel_change_log.csv`, `invalid_actions.csv`, `run_events.csv`, `metrics_summary.csv`, `config_resolved.yaml`, and `figures/` with throughput, AP occupancy, and fairness plots. `run_events.csv` records policy requests, completed or rejected control actions, station arrivals/departures, and run start/completion. For the SRS-compatible default duration, omit `--duration` (1,200 seconds; first 60 seconds are excluded from summary metrics).
 
 ## Project structure
 

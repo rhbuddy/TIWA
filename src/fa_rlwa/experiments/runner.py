@@ -5,10 +5,13 @@ from __future__ import annotations
 import argparse
 import csv
 import importlib.metadata
+import json
 import logging
 import os
 import subprocess
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +23,7 @@ from fa_rlwa.experiments.metrics import channel_occupancy_std, summarize_run
 from fa_rlwa.experiments.plots import plot_run
 from fa_rlwa.policies.factory import make_policy
 from fa_rlwa.sim.network import WifiNetwork
+from fa_rlwa.types import Action, ChannelChange, Handover
 from fa_rlwa.validation.wifi_scan import check_wifi_scan
 
 LOGGER = logging.getLogger(__name__)
@@ -52,6 +56,32 @@ STA_BASE_FIELDS = [
     "traffic_type",
 ]
 HANDOVER_FIELDS = ["run_id", "t", "sta_id", "from_ap", "to_ap", "policy", "trigger"]
+CHANNEL_CHANGE_FIELDS = [
+    "run_id",
+    "t",
+    "ap_id",
+    "from_channel",
+    "to_channel",
+    "policy",
+    "trigger",
+]
+RUN_EVENT_FIELDS = ["run_id", "t", "event_type", "entity", "details"]
+
+
+@dataclass(frozen=True)
+class ExperimentProgress:
+    """Latest controller/simulator snapshot exposed to live UI monitors."""
+
+    elapsed_s: int
+    duration_s: int
+    metrics: dict[str, float | int]
+    ap_indicators: list[dict[str, Any]]
+    stations: list[dict[str, Any]]
+    decisions: list[dict[str, Any]]
+    events: list[dict[str, Any]]
+
+
+ProgressCallback = Callable[[ExperimentProgress], None]
 
 
 def _write_csv(path: Path, fieldnames: list[str], rows: list[dict[str, Any]]) -> None:
@@ -62,6 +92,38 @@ def _write_csv(path: Path, fieldnames: list[str], rows: list[dict[str, Any]]) ->
         writer = csv.DictWriter(stream, fieldnames=fieldnames, extrasaction="ignore")
         writer.writeheader()
         writer.writerows(rows)
+
+
+def _event_row(run_id: str, t: int, event_type: str, entity: str, details: Any) -> dict[str, Any]:
+    """Create a structured, JSON-safe event row for UI display and CSV export."""
+
+    return {
+        "run_id": run_id,
+        "t": t,
+        "event_type": event_type,
+        "entity": entity,
+        "details": json.dumps(details, sort_keys=True, default=str),
+    }
+
+
+def _action_record(action: Action) -> dict[str, Any]:
+    """Normalize a policy request for live display and the event trail."""
+
+    if isinstance(action, Handover):
+        return {
+            "action": "handover",
+            "entity": f"STA {action.sta_id}",
+            "target": f"AP {action.target_ap}",
+            "reason": action.reason,
+        }
+    if isinstance(action, ChannelChange):
+        return {
+            "action": "channel_change",
+            "entity": f"AP {action.ap_id}",
+            "target_channel": action.channel,
+            "reason": action.reason,
+        }
+    return {"action": type(action).__name__, "details": repr(action)}
 
 
 def _git_commit() -> str:
@@ -147,8 +209,9 @@ def run_experiment(
     policy_config: str | Path | None = None,
     k_max: int | None = None,
     make_plots: bool = True,
+    progress_callback: ProgressCallback | None = None,
 ) -> dict[str, Any]:
-    """Execute a run and return its summary metrics."""
+    """Execute a run, optionally streaming each control-cycle snapshot to a UI."""
 
     scenario = load_scenario(scenario_path)
     duration = int(duration_s or scenario.duration_s)
@@ -181,33 +244,58 @@ def run_experiment(
     report_rows = []
     max_ap = len(scenario.aps)
     sta_fields = STA_BASE_FIELDS + [f"rssi_dbm_ap{i}" for i in range(max_ap)]
+    run_event_rows = [
+        _event_row(
+            run_id,
+            0,
+            "run_started",
+            "controller",
+            {
+                "scenario": scenario.name,
+                "policy": policy_name,
+                "seed": seed,
+                "duration_s": duration,
+                "warmup_s": scenario.warmup_s,
+            },
+        )
+    ]
 
     for _ in range(duration):
+        previous_ap_by_sta = {sta.sta_id: sta.ap_id for sta in state.stas}
+        previous_sta_ids = set(previous_ap_by_sta)
+        handover_start = len(controller.network.handover_events)
+        channel_change_start = len(controller.network.channel_events)
+        invalid_action_start = len(controller.network.invalid_action_events)
+
         state = controller.step()
         report = state.reports[-1]
-        step_metrics = dict(controller.network.last_step_metrics)
+        network = controller.network
+        step_metrics = dict(network.last_step_metrics)
         step_metrics["occ_std"] = channel_occupancy_std(report, state.aps)
         if state.t >= scenario.warmup_s:
             step_rows.append(step_metrics)
             report_rows.append(report)
 
+        ap_tick_rows: list[dict[str, Any]] = []
         for ap_id, ap in enumerate(state.aps):
-            ap_rows.append(
-                {
-                    "run_id": run_id,
-                    "t": state.t,
-                    "ap_id": ap_id,
-                    "channel": ap.channel,
-                    "n_clients": int(report.n_clients[ap_id]),
-                    "rssi_dbm": float(report.rssi_dbm[ap_id]),
-                    "loss_frac": float(report.loss_frac[ap_id]),
-                    "tput_mbps": float(report.tput_mbps[ap_id]),
-                    "occ_frac": float(report.occ_frac[ap_id]),
-                    "airtime_own_frac": float(report.airtime_own_frac[ap_id]),
-                    "demand_mbps": float(report.demand_mbps[ap_id]),
-                }
-            )
-        for row, sta in enumerate(state.stas):
+            row = {
+                "run_id": run_id,
+                "t": state.t,
+                "ap_id": ap_id,
+                "channel": ap.channel,
+                "n_clients": int(report.n_clients[ap_id]),
+                "rssi_dbm": float(report.rssi_dbm[ap_id]),
+                "loss_frac": float(report.loss_frac[ap_id]),
+                "tput_mbps": float(report.tput_mbps[ap_id]),
+                "occ_frac": float(report.occ_frac[ap_id]),
+                "airtime_own_frac": float(report.airtime_own_frac[ap_id]),
+                "demand_mbps": float(report.demand_mbps[ap_id]),
+            }
+            ap_rows.append(row)
+            ap_tick_rows.append(row)
+
+        sta_tick_rows: list[dict[str, Any]] = []
+        for row_index, sta in enumerate(state.stas):
             item: dict[str, Any] = {
                 "run_id": run_id,
                 "t": state.t,
@@ -215,15 +303,129 @@ def run_experiment(
                 "ap_id": sta.ap_id,
                 "x_m": sta.pos[0],
                 "y_m": sta.pos[1],
-                "phy_mbps": float(state.sta_phy_mbps[row]),
-                "offered_mbps": float(state.sta_demand_mbps[row]),
-                "tput_mbps": float(state.sta_tput_mbps[row]),
-                "p_fail": float(state.sta_loss_frac[row]),
-                "retx_per_frame": float(state.sta_retx_per_frame[row]),
+                "phy_mbps": float(state.sta_phy_mbps[row_index]),
+                "offered_mbps": float(state.sta_demand_mbps[row_index]),
+                "tput_mbps": float(state.sta_tput_mbps[row_index]),
+                "p_fail": float(state.sta_loss_frac[row_index]),
+                "retx_per_frame": float(state.sta_retx_per_frame[row_index]),
                 "traffic_type": sta.traffic_type,
             }
-            item.update({f"rssi_dbm_ap{i}": float(state.rssi_dbm[row, i]) for i in range(max_ap)})
+            item.update(
+                {
+                    f"rssi_dbm_ap{ap_id}": float(state.rssi_dbm[row_index, ap_id])
+                    for ap_id in range(max_ap)
+                }
+            )
             sta_rows.append(item)
+            sta_tick_rows.append(item)
+
+        decisions = [_action_record(action) for action in controller.last_actions]
+        step_events: list[dict[str, Any]] = []
+        for decision in decisions:
+            step_events.append(
+                _event_row(run_id, state.t, "policy_action", str(decision["entity"]), decision)
+            )
+
+        new_handovers = network.handover_events[handover_start:]
+        explicit_handover_ids = {int(str(event["sta_id"])) for event in new_handovers}
+        for event in new_handovers:
+            step_events.append(
+                _event_row(
+                    run_id,
+                    int(str(event.get("t", state.t))),
+                    "handover",
+                    f"STA {event.get('sta_id', '?')}",
+                    event,
+                )
+            )
+        for event in network.channel_events[channel_change_start:]:
+            step_events.append(
+                _event_row(
+                    run_id,
+                    int(str(event.get("t", state.t))),
+                    "channel_change",
+                    f"AP {event.get('ap_id', '?')}",
+                    event,
+                )
+            )
+        for event in network.invalid_action_events[invalid_action_start:]:
+            entity = (
+                f"STA {event['sta_id']}"
+                if "sta_id" in event
+                else f"AP {event['ap_id']}"
+                if "ap_id" in event
+                else "controller"
+            )
+            step_events.append(
+                _event_row(
+                    run_id,
+                    int(str(event.get("t", state.t))),
+                    "invalid_action",
+                    entity,
+                    event,
+                )
+            )
+
+        current_stas = {sta.sta_id: sta for sta in state.stas}
+        for sta_id in sorted(current_stas.keys() - previous_sta_ids):
+            sta = current_stas[sta_id]
+            step_events.append(
+                _event_row(
+                    run_id,
+                    state.t,
+                    "station_joined",
+                    f"STA {sta_id}",
+                    {"ap_id": sta.ap_id, "traffic_type": sta.traffic_type},
+                )
+            )
+        for sta_id in sorted(previous_sta_ids - current_stas.keys()):
+            step_events.append(
+                _event_row(
+                    run_id,
+                    state.t,
+                    "station_left",
+                    f"STA {sta_id}",
+                    {"previous_ap_id": previous_ap_by_sta[sta_id]},
+                )
+            )
+        for sta_id in sorted(previous_sta_ids & current_stas.keys()):
+            sta = current_stas[sta_id]
+            previous_ap = previous_ap_by_sta[sta_id]
+            if sta.ap_id != previous_ap and sta_id not in explicit_handover_ids:
+                step_events.append(
+                    _event_row(
+                        run_id,
+                        state.t,
+                        "association_fallback",
+                        f"STA {sta_id}",
+                        {"from_ap": previous_ap, "to_ap": sta.ap_id},
+                    )
+                )
+
+        run_event_rows.extend(step_events)
+        if progress_callback is not None:
+            progress_callback(
+                ExperimentProgress(
+                    elapsed_s=state.t,
+                    duration_s=duration,
+                    metrics={
+                        "aggregate_tput_mbps": float(step_metrics["agg_tput_mbps"]),
+                        "offered_load_mbps": float(step_metrics["offered_mbps"]),
+                        "jain_fairness": float(step_metrics["jfi"]),
+                        "mean_ap_occupancy": float(step_metrics["occ_mean"]),
+                        "occupancy_std": float(step_metrics["occ_std"]),
+                        "mean_retries_per_frame": float(step_metrics["retx_per_frame"]),
+                        "decision_latency_ms": float(step_metrics["decision_latency_ms"]),
+                        "active_stations": len(state.stas),
+                        "handovers_this_step": int(step_metrics["handovers"]),
+                        "invalid_actions_this_step": int(step_metrics["invalid_actions"]),
+                    },
+                    ap_indicators=ap_tick_rows,
+                    stations=sta_tick_rows,
+                    decisions=decisions,
+                    events=step_events,
+                )
+            )
 
     handover_rows = [
         {
@@ -240,6 +442,19 @@ def run_experiment(
     _write_csv(root / "ap_indicators.csv", AP_FIELDS, ap_rows)
     _write_csv(root / "sta_log.csv", sta_fields, sta_rows)
     _write_csv(root / "handover_log.csv", HANDOVER_FIELDS, handover_rows)
+    channel_change_rows = [
+        {
+            "run_id": run_id,
+            "t": event["t"],
+            "ap_id": event["ap_id"],
+            "from_channel": event["from_channel"],
+            "to_channel": event["to_channel"],
+            "policy": policy_name,
+            "trigger": event["reason"],
+        }
+        for event in controller.network.channel_events
+    ]
+    _write_csv(root / "channel_change_log.csv", CHANNEL_CHANGE_FIELDS, channel_change_rows)
     invalid_rows = [
         {"run_id": run_id, **event} for event in controller.network.invalid_action_events
     ]
@@ -259,6 +474,22 @@ def run_experiment(
         handover_events=controller.network.handover_events,
         decision_latencies_ms=controller.decision_latencies_ms,
     )
+    run_event_rows.append(
+        _event_row(
+            run_id,
+            duration,
+            "run_completed",
+            "controller",
+            {
+                "total_events": len(run_event_rows),
+                "aggregate_tput_mbps": summary["agg_tput_mbps"],
+                "jain_fairness": summary["jfi"],
+                "handovers": summary["handovers"],
+                "invalid_actions": summary["invalid_actions"],
+            },
+        )
+    )
+    _write_csv(root / "run_events.csv", RUN_EVENT_FIELDS, run_event_rows)
     _write_csv(root / "metrics_summary.csv", list(summary), [summary])
     resolved = {
         "run_id": run_id,

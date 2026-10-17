@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import csv
 import sys
+import traceback
+from collections import deque
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -10,7 +13,7 @@ from typing import Any
 import streamlit as st
 
 from fa_rlwa.config import load_scenario
-from fa_rlwa.experiments.runner import run_experiment
+from fa_rlwa.experiments.runner import ExperimentProgress, run_experiment
 from fa_rlwa.validation.wifi_scan import check_wifi_scan
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
@@ -73,39 +76,183 @@ def _show_wifi_preflight(interface: str) -> bool:
     return False
 
 
+def _display_trace_file(path: Path, title: str, key: str) -> None:
+    """Display a selectable tail of a trace and offer the complete CSV download."""
+
+    if not path.is_file():
+        st.info(f"`{path.name}` was not generated for this run.")
+        return
+    row_limit = st.selectbox(
+        "Rows to display",
+        [100, 500, 1_000, 5_000, "All"],
+        index=2,
+        key=f"trace-limit-{key}",
+    )
+    preview: list[dict[str, str]] = []
+    total_rows = 0
+    with path.open(encoding="utf-8", newline="") as stream:
+        reader = csv.DictReader(stream)
+        if row_limit == "All":
+            preview = list(reader)
+            total_rows = len(preview)
+        else:
+            limit = row_limit if isinstance(row_limit, int) else 1_000
+            recent_rows: deque[dict[str, str]] = deque(maxlen=limit)
+            for row in reader:
+                total_rows += 1
+                recent_rows.append(row)
+            preview = list(recent_rows)
+    if not preview:
+        st.info(f"{title} has no records for this run.")
+    else:
+        st.caption(
+            f"Showing {len(preview):,} of {total_rows:,} rows from `{path.name}`. "
+            "The download always contains the complete trace."
+        )
+        st.dataframe(preview, hide_index=True, use_container_width=True, height=500)
+
+
 def _display_result(run: dict[str, Any]) -> None:
-    """Show summary metrics, plots, and a CSV download for the last run."""
+    """Show summary metrics, full traces, events, resolved config, and artifacts."""
 
     summary = run["summary"]
     run_dir = Path(run["output_dir"])
-    st.subheader("Latest run")
-    st.caption(f"Output: `{run_dir}`")
-    metric_columns = st.columns(4)
-    metric_columns[0].metric("Aggregate throughput", f"{summary['agg_tput_mbps']:.2f} Mbps")
-    metric_columns[1].metric("Jain fairness", f"{summary['jfi']:.3f}")
-    metric_columns[2].metric("Handovers", str(summary["handovers"]))
-    metric_columns[3].metric("Mean occupancy", f"{summary['occ_mean']:.1%}")
-    st.dataframe([summary], hide_index=True, use_container_width=True)
+    st.subheader("Latest run — complete run trace")
+    st.caption(f"Output folder: `{run_dir}`")
+    detail = st.selectbox(
+        "Run details",
+        [
+            "Overview",
+            "AP telemetry",
+            "Client telemetry",
+            "Decisions & events",
+            "Resolved config",
+            "Files",
+        ],
+        key="run-details-section",
+    )
 
-    summary_path = run_dir / "metrics_summary.csv"
-    st.download_button(
-        "Download summary CSV",
-        data=summary_path.read_bytes(),
-        file_name=summary_path.name,
-        mime="text/csv",
+    if detail == "Overview":
+        metric_columns = st.columns(6)
+        metric_columns[0].metric("Throughput", f"{summary['agg_tput_mbps']:.2f} Mbps")
+        metric_columns[1].metric("Jain fairness", f"{summary['jfi']:.3f}")
+        metric_columns[2].metric("Handovers", str(summary["handovers"]))
+        metric_columns[3].metric("Mean occupancy", f"{summary['occ_mean']:.1%}")
+        metric_columns[4].metric("Invalid actions", str(summary["invalid_actions"]))
+        metric_columns[5].metric("Decision p95", f"{summary['decision_ms_p95']:.2f} ms")
+        st.dataframe([summary], hide_index=True, use_container_width=True)
+        figures = run_dir / "figures"
+        plot_files = (
+            ("Throughput", figures / "throughput_over_time.png"),
+            ("AP occupancy", figures / "per_ap_load.png"),
+            ("Fairness", figures / "fairness_over_time.png"),
+        )
+        available_plots = [(title, path) for title, path in plot_files if path.exists()]
+        if available_plots:
+            st.subheader("Run plots")
+            columns = st.columns(len(available_plots))
+            for column, (title, path) in zip(columns, available_plots, strict=True):
+                column.image(str(path), caption=title, use_column_width=True)
+    elif detail == "AP telemetry":
+        st.caption("Per-second channel, load, signal, throughput, and occupancy measurements.")
+        _display_trace_file(run_dir / "ap_indicators.csv", "AP telemetry", "ap")
+    elif detail == "Client telemetry":
+        st.caption("Per-client association, location, load, PHY rate, retries, loss, and AP RSSI.")
+        _display_trace_file(run_dir / "sta_log.csv", "Client telemetry", "stations")
+    elif detail == "Decisions & events":
+        st.caption(
+            "Policy requests, executed handovers/channel changes, lifecycle changes, "
+            "and rejected actions."
+        )
+        event_views = {
+            "All events": ("run_events.csv", "All run events", "events"),
+            "Handovers": ("handover_log.csv", "Handovers", "handovers"),
+            "Channel changes": ("channel_change_log.csv", "Channel changes", "channels"),
+            "Rejected actions": ("invalid_actions.csv", "Rejected actions", "invalid"),
+        }
+        selected_view = st.selectbox("Event view", list(event_views), key="event-view")
+        filename, title, key = event_views[selected_view]
+        _display_trace_file(run_dir / filename, title, key)
+    elif detail == "Resolved config":
+        config_path = run_dir / "config_resolved.yaml"
+        if config_path.is_file():
+            st.code(config_path.read_text(encoding="utf-8"), language="yaml")
+        else:
+            st.info("Resolved configuration was not written for this run.")
+    else:
+        artifact_names = (
+            "metrics_summary.csv",
+            "ap_indicators.csv",
+            "sta_log.csv",
+            "handover_log.csv",
+            "channel_change_log.csv",
+            "invalid_actions.csv",
+            "run_events.csv",
+            "config_resolved.yaml",
+        )
+        available_artifacts = [name for name in artifact_names if (run_dir / name).is_file()]
+        if not available_artifacts:
+            st.info("No downloadable files were written for this run.")
+            return
+        st.caption("Choose one exact output file to download.")
+        selected_artifact = st.selectbox(
+            "Run file", available_artifacts, key="run-artifact-selection"
+        )
+        artifact_path = run_dir / selected_artifact
+        st.caption(f"File size: {artifact_path.stat().st_size:,} bytes")
+        st.download_button(
+            f"Download {selected_artifact}",
+            data=artifact_path.read_bytes(),
+            file_name=selected_artifact,
+            mime="text/yaml" if artifact_path.suffix == ".yaml" else "text/csv",
+            key="selected-artifact-download",
+        )
+
+
+def _render_live_snapshot(
+    progress: ExperimentProgress, recent_events: list[dict[str, Any]]
+) -> None:
+    """Render the current controller cycle while the simulation is executing."""
+
+    st.subheader(f"Live simulator state · second {progress.elapsed_s:,}")
+    primary_metrics = st.columns(5)
+    primary_metrics[0].metric(
+        "Aggregate throughput", f"{progress.metrics['aggregate_tput_mbps']:.2f} Mbps"
     )
-    figures = run_dir / "figures"
-    plot_files = (
-        ("Throughput", figures / "throughput_over_time.png"),
-        ("AP occupancy", figures / "per_ap_load.png"),
-        ("Fairness", figures / "fairness_over_time.png"),
+    primary_metrics[1].metric("Offered load", f"{progress.metrics['offered_load_mbps']:.2f} Mbps")
+    primary_metrics[2].metric("Jain fairness", f"{progress.metrics['jain_fairness']:.3f}")
+    primary_metrics[3].metric("Mean AP occupancy", f"{progress.metrics['mean_ap_occupancy']:.1%}")
+    primary_metrics[4].metric("Occupancy spread", f"{progress.metrics['occupancy_std']:.3f}")
+
+    control_metrics = st.columns(5)
+    control_metrics[0].metric("Active clients", str(progress.metrics["active_stations"]))
+    control_metrics[1].metric(
+        "Mean retries/frame", f"{progress.metrics['mean_retries_per_frame']:.3f}"
     )
-    available_plots = [(title, path) for title, path in plot_files if path.exists()]
-    if available_plots:
-        st.subheader("Run plots")
-        columns = st.columns(len(available_plots))
-        for column, (title, path) in zip(columns, available_plots, strict=True):
-            column.image(str(path), caption=title, use_column_width=True)
+    control_metrics[2].metric(
+        "Decision latency", f"{progress.metrics['decision_latency_ms']:.2f} ms"
+    )
+    control_metrics[3].metric("Handovers this tick", str(progress.metrics["handovers_this_step"]))
+    control_metrics[4].metric(
+        "Rejected actions", str(progress.metrics["invalid_actions_this_step"])
+    )
+
+    st.markdown("**Current AP telemetry**")
+    st.dataframe(progress.ap_indicators, hide_index=True, use_container_width=True, height=180)
+    st.markdown("**Current client state**")
+    st.dataframe(progress.stations, hide_index=True, use_container_width=True, height=240)
+    st.markdown("**Policy requests and events**")
+    if progress.decisions:
+        st.dataframe(progress.decisions, hide_index=True, use_container_width=True)
+    else:
+        st.caption("The policy requested no handover or channel change on this cycle.")
+    if progress.events:
+        st.dataframe(progress.events, hide_index=True, use_container_width=True)
+    else:
+        st.caption("No network events or rejected actions on this cycle.")
+    if recent_events:
+        st.caption("Recent event history (up to 50 newest records)")
+        st.dataframe(recent_events[-50:], hide_index=True, use_container_width=True, height=220)
 
 
 def main() -> None:
@@ -204,7 +351,46 @@ def main() -> None:
                     "post-warm-up summary metrics will be zero."
                 )
             try:
-                with st.spinner("Running the experiment…"):
+                recent_events: list[dict[str, Any]] = []
+                refresh_every = max(1, int(duration) // 40)
+                last_rendered_step = 0
+                with st.status(
+                    "Preparing scenario, policy, and simulator…", expanded=True
+                ) as status:
+                    st.write("Loading the selected configuration and starting the controller loop.")
+                    progress_bar = st.progress(0.0, text="Initializing simulator…")
+                    live_panel = st.empty()
+
+                    def update_progress(progress: ExperimentProgress) -> None:
+                        nonlocal last_rendered_step
+                        recent_events.extend(progress.events)
+                        if len(recent_events) > 250:
+                            del recent_events[:-250]
+                        should_render = (
+                            progress.elapsed_s == progress.duration_s
+                            or progress.events
+                            or progress.elapsed_s - last_rendered_step >= refresh_every
+                        )
+                        if should_render:
+                            last_rendered_step = progress.elapsed_s
+                            progress_bar.progress(
+                                progress.elapsed_s / progress.duration_s,
+                                text=(
+                                    f"Simulated {progress.elapsed_s:,} / "
+                                    f"{progress.duration_s:,} seconds"
+                                ),
+                            )
+                            status.update(
+                                label=(
+                                    f"Controller running · second {progress.elapsed_s:,} "
+                                    f"of {progress.duration_s:,}"
+                                ),
+                                state="running",
+                                expanded=True,
+                            )
+                            with live_panel.container():
+                                _render_live_snapshot(progress, recent_events)
+
                     summary = run_experiment(
                         SCENARIOS[scenario_key],
                         policy,
@@ -216,14 +402,25 @@ def main() -> None:
                         forecast_model=forecast_model,
                         k_max=k_max,
                         make_plots=True,
+                        progress_callback=update_progress,
+                    )
+                    progress_bar.progress(1.0, text="Run artifacts written")
+                    status.update(
+                        label="Experiment completed · full trace and artifacts are available below",
+                        state="complete",
+                        expanded=False,
                     )
                 st.session_state["last_run"] = {
                     "summary": summary,
                     "output_dir": str(output_dir),
                 }
-                st.success("Experiment completed.")
+                st.success(
+                    "Experiment completed. Inspect telemetry and decisions in the tabs below."
+                )
             except Exception as exc:  # The UI should report a failed run without crashing the app.
                 st.error(f"Experiment failed: {exc}")
+                with st.expander("Technical details", expanded=True):
+                    st.code(traceback.format_exc(), language="text")
 
     last_run = st.session_state.get("last_run")
     if last_run:
