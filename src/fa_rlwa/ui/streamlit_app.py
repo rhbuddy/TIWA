@@ -10,7 +10,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+import matplotlib
+
+matplotlib.use("Agg")
+
 import streamlit as st
+from matplotlib.figure import Figure
 
 from fa_rlwa.config import load_scenario
 from fa_rlwa.experiments.runner import ExperimentProgress, run_experiment
@@ -76,12 +81,12 @@ def _show_wifi_preflight(interface: str) -> bool:
     return False
 
 
-def _display_trace_file(path: Path, title: str, key: str) -> None:
-    """Display a selectable tail of a trace and offer the complete CSV download."""
+def _display_trace_file(path: Path, title: str, key: str) -> list[dict[str, str]]:
+    """Display a selectable tail of a trace and return the rows shown."""
 
     if not path.is_file():
         st.info(f"`{path.name}` was not generated for this run.")
-        return
+        return []
     row_limit = st.selectbox(
         "Rows to display",
         [100, 500, 1_000, 5_000, "All"],
@@ -107,9 +112,10 @@ def _display_trace_file(path: Path, title: str, key: str) -> None:
     else:
         st.caption(
             f"Showing {len(preview):,} of {total_rows:,} rows from `{path.name}`. "
-            "The download always contains the complete trace."
+            "Select All to display the full trace; download it from the Files view."
         )
         st.dataframe(preview, hide_index=True, use_container_width=True, height=500)
+    return preview
 
 
 def _display_result(run: dict[str, Any]) -> None:
@@ -172,7 +178,9 @@ def _display_result(run: dict[str, Any]) -> None:
         }
         selected_view = st.selectbox("Event view", list(event_views), key="event-view")
         filename, title, key = event_views[selected_view]
-        _display_trace_file(run_dir / filename, title, key)
+        shown_events = _display_trace_file(run_dir / filename, title, key)
+        if selected_view == "All events" and shown_events:
+            st.pyplot(_draw_event_timeline(shown_events), use_container_width=True)
     elif detail == "Resolved config":
         config_path = run_dir / "config_resolved.yaml"
         if config_path.is_file():
@@ -209,10 +217,120 @@ def _display_result(run: dict[str, Any]) -> None:
         )
 
 
+def _wide_ap_chart(history: list[dict[str, Any]], metric: str) -> list[dict[str, Any]]:
+    """Pivot long per-AP telemetry into Streamlit's multi-line chart format."""
+
+    by_time: dict[int, dict[str, Any]] = {}
+    for row in history:
+        time_s = int(row["t"])
+        ap_label = f"AP {int(row['ap_id'])}"
+        by_time.setdefault(time_s, {"t": time_s})[ap_label] = float(row[metric])
+    return [by_time[time_s] for time_s in sorted(by_time)]
+
+
+def _draw_association_map(
+    ap_rows: list[dict[str, Any]], station_rows: list[dict[str, Any]]
+) -> Figure:
+    """Draw the current AP/client geometry and active station-to-AP associations."""
+
+    figure = Figure(figsize=(9, 5))
+    axis = figure.add_subplot(111)
+    palette = (
+        "#1570ef",
+        "#12b76a",
+        "#f79009",
+        "#d92d20",
+        "#7a5af8",
+        "#06aed4",
+        "#db2777",
+        "#667085",
+        "#84cc16",
+        "#9333ea",
+    )
+    ap_by_id = {int(row["ap_id"]): row for row in ap_rows}
+    ap_positions: dict[int, tuple[float, float]] = {}
+    all_x: list[float] = []
+    all_y: list[float] = []
+
+    for ap_id, ap in ap_by_id.items():
+        x_m, y_m = float(ap["x_m"]), float(ap["y_m"])
+        ap_positions[ap_id] = (x_m, y_m)
+        all_x.append(x_m)
+        all_y.append(y_m)
+        color = palette[ap_id % len(palette)]
+        axis.scatter([x_m], [y_m], marker="^", s=260, color=color, edgecolors="#101828", zorder=3)
+        axis.annotate(
+            f"AP {ap_id} · ch {ap['channel']} · {ap['n_clients']} clients",
+            (x_m, y_m),
+            xytext=(7, 9),
+            textcoords="offset points",
+            fontsize=8,
+            weight="bold",
+        )
+
+    for station in station_rows:
+        x_m, y_m = float(station["x_m"]), float(station["y_m"])
+        all_x.append(x_m)
+        all_y.append(y_m)
+        ap_id = int(station["ap_id"])
+        color = palette[ap_id % len(palette)] if ap_id >= 0 else "#98a2b3"
+        if ap_id in ap_positions:
+            ap_x, ap_y = ap_positions[ap_id]
+            axis.plot([ap_x, x_m], [ap_y, y_m], color=color, alpha=0.22, linewidth=0.8)
+        axis.scatter([x_m], [y_m], marker="o", s=32, color=color, alpha=0.9, zorder=2)
+
+    if all_x and all_y:
+        x_padding = max(1.0, (max(all_x) - min(all_x)) * 0.06)
+        y_padding = max(1.0, (max(all_y) - min(all_y)) * 0.06)
+        axis.set_xlim(min(all_x) - x_padding, max(all_x) + x_padding)
+        axis.set_ylim(min(all_y) - y_padding, max(all_y) + y_padding)
+    axis.set_aspect("equal", adjustable="box")
+    axis.set_xlabel("X position (m)")
+    axis.set_ylabel("Y position (m)")
+    axis.set_title("Live Wi-Fi topology and client associations")
+    axis.grid(alpha=0.25)
+    figure.tight_layout()
+    return figure
+
+
+def _draw_event_timeline(events: list[dict[str, str]]) -> Figure:
+    """Draw the selected run events along the simulated-time axis."""
+
+    by_type: dict[str, list[int]] = {}
+    for event in events:
+        try:
+            event_time = int(event["t"])
+        except (KeyError, ValueError):
+            continue
+        by_type.setdefault(event.get("event_type", "event"), []).append(event_time)
+
+    figure = Figure(figsize=(9, max(2.5, 0.55 * len(by_type))))
+    axis = figure.add_subplot(111)
+    palette = ("#1570ef", "#12b76a", "#f79009", "#d92d20", "#7a5af8", "#06aed4")
+    event_types = sorted(by_type)
+    for row_index, event_type in enumerate(event_types):
+        axis.scatter(
+            by_type[event_type],
+            [row_index] * len(by_type[event_type]),
+            color=palette[row_index % len(palette)],
+            s=36,
+            label=event_type,
+        )
+    axis.set_yticks(range(len(event_types)), event_types)
+    axis.set_xlabel("Simulation second")
+    axis.set_title("Controller and network event timeline")
+    axis.grid(axis="x", alpha=0.25)
+    figure.tight_layout()
+    return figure
+
+
 def _render_live_snapshot(
-    progress: ExperimentProgress, recent_events: list[dict[str, Any]]
+    progress: ExperimentProgress,
+    recent_events: list[dict[str, Any]],
+    metric_history: list[dict[str, Any]],
+    ap_history: list[dict[str, Any]],
 ) -> None:
-    """Render the current controller cycle while the simulation is executing."""
+    """Render current control state as live metrics, charts, and a network map."""
 
     st.subheader(f"Live simulator state · second {progress.elapsed_s:,}")
     primary_metrics = st.columns(5)
@@ -237,6 +355,38 @@ def _render_live_snapshot(
         "Rejected actions", str(progress.metrics["invalid_actions_this_step"])
     )
 
+    if metric_history:
+        throughput_column, fairness_column = st.columns(2)
+        with throughput_column:
+            st.caption("Delivered throughput vs offered load (Mbps)")
+            st.line_chart(
+                metric_history,
+                x="t",
+                y=["aggregate_tput_mbps", "offered_load_mbps"],
+                height=220,
+            )
+        with fairness_column:
+            st.caption("Jain fairness over time")
+            st.line_chart(metric_history, x="t", y="jain_fairness", height=220)
+
+    ap_chart_rows = _wide_ap_chart(ap_history, "tput_mbps")
+    occupancy_chart_rows = _wide_ap_chart(ap_history, "occ_frac")
+    if ap_chart_rows:
+        throughput_column, occupancy_column = st.columns(2)
+        with throughput_column:
+            st.caption("Per-AP throughput (Mbps)")
+            st.line_chart(ap_chart_rows, x="t", height=220)
+        with occupancy_column:
+            st.caption("Per-AP channel occupancy")
+            st.line_chart(occupancy_chart_rows, x="t", height=220)
+
+    st.caption(
+        "Triangles are APs; client dots and association lines use the connected AP's color. "
+        "Gray dots are unassociated clients."
+    )
+    st.pyplot(
+        _draw_association_map(progress.ap_indicators, progress.stations), use_container_width=True
+    )
     st.markdown("**Current AP telemetry**")
     st.dataframe(progress.ap_indicators, hide_index=True, use_container_width=True, height=180)
     st.markdown("**Current client state**")
@@ -352,6 +502,8 @@ def main() -> None:
                 )
             try:
                 recent_events: list[dict[str, Any]] = []
+                metric_history: deque[dict[str, Any]] = deque(maxlen=1_000)
+                ap_history: deque[dict[str, Any]] = deque(maxlen=20_000)
                 refresh_every = max(1, int(duration) // 40)
                 last_rendered_step = 0
                 with st.status(
@@ -366,6 +518,8 @@ def main() -> None:
                         recent_events.extend(progress.events)
                         if len(recent_events) > 250:
                             del recent_events[:-250]
+                        metric_history.append({"t": progress.elapsed_s, **progress.metrics})
+                        ap_history.extend(progress.ap_indicators)
                         should_render = (
                             progress.elapsed_s == progress.duration_s
                             or progress.events
@@ -389,7 +543,12 @@ def main() -> None:
                                 expanded=True,
                             )
                             with live_panel.container():
-                                _render_live_snapshot(progress, recent_events)
+                                _render_live_snapshot(
+                                    progress,
+                                    recent_events,
+                                    list(metric_history),
+                                    list(ap_history),
+                                )
 
                     summary = run_experiment(
                         SCENARIOS[scenario_key],

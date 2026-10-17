@@ -33,9 +33,13 @@ def test_runner_writes_srs_compatible_run_artifacts_and_streams_progress(tmp_pat
         row = next(csv.DictReader(stream))
     assert row["run_id"] == "sc1_steady_client_driven_s7"
     assert float(row["decision_ms_mean"]) >= 0
+    with (run_dir / "ap_indicators.csv").open(encoding="utf-8", newline="") as stream:
+        ap_row = next(csv.DictReader(stream))
+    assert {"x_m", "y_m"} <= set(ap_row)
     assert result["seed"] == 7
     assert [snapshot.elapsed_s for snapshot in progress] == [1, 2, 3, 4, 5]
     assert progress[-1].ap_indicators
+    assert {"x_m", "y_m"} <= set(progress[-1].ap_indicators[0])
     assert progress[-1].stations
     assert progress[-1].metrics["active_stations"] == len(progress[-1].stations)
     with (run_dir / "run_events.csv").open(encoding="utf-8", newline="") as stream:

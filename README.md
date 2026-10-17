@@ -64,7 +64,7 @@ python -m pip install -e ".[ui]"
 python -m streamlit run src/fa_rlwa/ui/streamlit_app.py
 ```
 
-The page lets you choose a scenario and policy, optionally check a Linux Wi-Fi adapter, and launch a simulation. While it runs, the dashboard shows progress, current AP/client telemetry, policy requests, and network events. Afterwards, the run-details views expose the complete AP/client traces, handovers, channel changes, rejected actions, resolved configuration, and downloadable output files. It runs the abstract simulator only. A separate Mininet-WiFi CLI backend is available for emulated AP/client control; neither the dashboard nor the preflight directly controls physical APs or client devices.
+The page lets you choose a scenario and policy, optionally check a Linux Wi-Fi adapter, and launch a simulation. While it runs, the dashboard streams throughput and fairness time-series, per-AP throughput and channel-occupancy charts, and a live map of APs, clients, and their current associations alongside progress, telemetry, policy requests, and network events. Completed-run views include an event timeline and expose the complete AP/client traces, handovers, channel changes, rejected actions, resolved configuration, and downloadable output files. It runs the abstract simulator only. A separate Mininet-WiFi CLI backend is available for emulated AP/client control; neither the dashboard nor the preflight directly controls physical APs or client devices.
 
 Run a short, reproducible baseline experiment from the CLI:
 

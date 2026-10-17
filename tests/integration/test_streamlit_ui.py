@@ -67,6 +67,11 @@ def test_dashboard_displays_completed_run_traces(tmp_path: Path) -> None:
     assert len(app.dataframe) == 1
 
     detail_selector = next(widget for widget in app.selectbox if widget.label == "Run details")
+    detail_selector.set_value("Decisions & events").run()
+    assert len(app.exception) == 0
+    assert len(app.get("imgs")) == 1
+
+    detail_selector = next(widget for widget in app.selectbox if widget.label == "Run details")
     detail_selector.set_value("Files").run()
     artifact_selector = next(widget for widget in app.selectbox if widget.label == "Run file")
     artifact_selector.set_value("run_events.csv").run()
@@ -93,8 +98,19 @@ def test_dashboard_renders_live_controller_snapshot(tmp_path: Path) -> None:
             "handovers_this_step": 1,
             "invalid_actions_this_step": 0,
         },
-        "ap_indicators": [{"t": 1, "ap_id": 0, "n_clients": 1, "tput_mbps": 12.5}],
-        "stations": [{"t": 1, "sta_id": 0, "ap_id": 0, "tput_mbps": 12.5}],
+        "ap_indicators": [
+            {
+                "t": 1,
+                "ap_id": 0,
+                "x_m": 0.0,
+                "y_m": 0.0,
+                "channel": 1,
+                "n_clients": 1,
+                "tput_mbps": 12.5,
+                "occ_frac": 0.4,
+            }
+        ],
+        "stations": [{"t": 1, "sta_id": 0, "ap_id": 0, "x_m": 2.0, "y_m": 2.0, "tput_mbps": 12.5}],
         "decisions": [{"action": "handover", "entity": "STA 0", "target": "AP 0"}],
         "events": [{"t": 1, "event_type": "handover", "entity": "STA 0", "details": "{}"}],
     }
@@ -106,7 +122,10 @@ def test_dashboard_renders_live_controller_snapshot(tmp_path: Path) -> None:
         f"snapshot = ExperimentProgress(**{snapshot!r})\n"
         "with st.status('Controller running', expanded=True) as status:\n"
         "    st.progress(snapshot.elapsed_s / snapshot.duration_s, text='Test progress')\n"
-        "    _render_live_snapshot(snapshot, snapshot.events)\n"
+        '    metric_history = [{"t": snapshot.elapsed_s, **snapshot.metrics}]\n'
+        "    _render_live_snapshot(\n"
+        "        snapshot, snapshot.events, metric_history, snapshot.ap_indicators\n"
+        "    )\n"
         "    status.update(label='Run complete', state='complete', expanded=False)\n",
         encoding="utf-8",
     )
@@ -114,3 +133,5 @@ def test_dashboard_renders_live_controller_snapshot(tmp_path: Path) -> None:
 
     assert len(app.exception) == 0
     assert len(app.dataframe) >= 4
+    assert len(app.get("arrow_vega_lite_chart")) == 4
+    assert len(app.get("imgs")) == 1
