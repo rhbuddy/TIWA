@@ -1,0 +1,7 @@
+policy: tiwa_fixed
+weights: [0.25, 0.25, 0.25, 0.25]
+delta: 0.05
+occupancy_threshold: 0.7
+loss_threshold: 0.15
+max_moves_per_cycle: 2
+dwell_s: 10

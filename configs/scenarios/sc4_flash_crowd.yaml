@@ -1,0 +1,26 @@
+name: sc4_flash_crowd
+area_m: [30, 20]
+duration_s: 1200
+warmup_s: 60
+step_s: 1
+channels: [1, 6, 11]
+aps:
+  - {id: 0, pos: [6, 5], channel: 1}
+  - {id: 1, pos: [15, 10], channel: 6}
+  - {id: 2, pos: [24, 15], channel: 11}
+background_stas:
+  count: 20
+  placement: uniform
+  mobility: static
+  traffic: {type: cbr, mbps: 1.0}
+flash_crowd:
+  count: 30
+  start_s: 300
+  window_s: 30
+  hotspot: [6, 5]
+  spread_m: 3.0
+  dwell_mean_s: 120
+  traffic: {type: cbr, mbps: 1.0}
+propagation: {pl0_db: 40, exponent: 3.0, shadow_sigma_db: 4.0, shadow_rho: 0.95, rssi_noise_db: 2.0}
+mac: {efficiency: 0.6, c_max: 0.9, tau: 0.01, retry_limit: 7}
+handover: {mode: lvap, outage_s: 0.2, dwell_s: 10, channel_change_dwell_s: 60, max_moves_per_cycle: 2}

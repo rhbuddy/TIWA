@@ -1,0 +1,10 @@
+out: results/rl_main
+scenarios:
+  - configs/scenarios/sc1_steady.yaml
+  - configs/scenarios/sc2_mobile.yaml
+  - configs/scenarios/sc4_flash_crowd.yaml
+  - configs/scenarios/sc5_mixed.yaml
+policies:
+  - {name: rl_forecast, model: models/rl/dqn_forecast_s0, k_max: 5}
+  - {name: rl_noforecast, model: models/rl/dqn_noforecast_s0, k_max: 5}
+seeds: {start: 200, stop: 220}

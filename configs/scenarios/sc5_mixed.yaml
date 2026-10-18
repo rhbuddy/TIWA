@@ -1,0 +1,30 @@
+name: sc5_mixed
+area_m: [30, 20]
+duration_s: 1200
+warmup_s: 60
+step_s: 1
+channels: [1, 6, 11]
+aps:
+  - {id: 0, pos: [5, 5], channel: 1}
+  - {id: 1, pos: [15, 5], channel: 6}
+  - {id: 2, pos: [25, 5], channel: 11}
+  - {id: 3, pos: [5, 15], channel: 6}
+  - {id: 4, pos: [25, 15], channel: 1}
+groups:
+  - count: 20
+    placement: uniform
+    mobility: static
+    traffic: {type: cbr, mbps: 1.0}
+  - count: 10
+    placement: uniform
+    mobility: random_waypoint
+    speed_mps: [0.5, 1.5]
+    traffic: {type: video, mbps: 4.0}
+  - count: 10
+    placement: uniform
+    mobility: random_waypoint
+    speed_mps: [0.5, 1.5]
+    traffic: {type: voip, mbps: 0.1}
+propagation: {pl0_db: 40, exponent: 3.0, shadow_sigma_db: 4.0, shadow_rho: 0.95, rssi_noise_db: 2.0}
+mac: {efficiency: 0.6, c_max: 0.9, tau: 0.01, retry_limit: 7}
+handover: {mode: lvap, outage_s: 0.2, dwell_s: 10, channel_change_dwell_s: 60, max_moves_per_cycle: 2}

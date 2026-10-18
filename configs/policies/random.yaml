@@ -1,0 +1,3 @@
+policy: random
+probability: 0.02
+dwell_s: 10

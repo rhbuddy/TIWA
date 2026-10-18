@@ -1,0 +1,4 @@
+policy: tiwa_forecast
+base_policy: tiwa_fixed
+beta: 0.5
+forecaster: ewma

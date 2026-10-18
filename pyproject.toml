@@ -1,0 +1,59 @@
+[build-system]
+requires = ["setuptools==69.2.0", "wheel==0.43.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fa-rlwa"
+version = "0.1.0"
+description = "Forecast-aware reinforcement learning for multi-indicator Wi-Fi association"
+readme = "README.md"
+requires-python = ">=3.10,<3.13"
+dependencies = [
+  "numpy==1.26.4",
+  "scipy==1.11.4",
+  "PyYAML==6.0.1",
+  "gymnasium==0.29.1",
+  "matplotlib==3.8.2",
+]
+
+[project.optional-dependencies]
+forecast = [
+  "scikit-learn==1.4.2",
+  "statsmodels==0.14.2",
+  "torch==2.2.2",
+  "xgboost==2.0.3",
+]
+rl = [
+  "stable-baselines3==2.3.2",
+  "sb3-contrib==2.3.0",
+]
+ui = [
+  "streamlit==1.38.0",
+  "pyarrow==17.0.0",
+]
+dev = [
+  "pytest==8.3.5",
+  "pytest-cov==5.0.0",
+  "ruff==0.9.10",
+  "mypy==1.14.1",
+]
+
+[project.scripts]
+fa-rlwa = "fa_rlwa.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

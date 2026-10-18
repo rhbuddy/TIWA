@@ -1,0 +1,8 @@
+model: arima
+auto_order: true
+p: [0, 1, 2, 3]
+d: [0, 1]
+q: [0, 1, 2, 3]
+refit_interval_s: 60
+history_window_s: 300
+horizons_s: [5, 10, 30]

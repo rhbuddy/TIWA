@@ -1,0 +1,9 @@
+model: lstm
+layers: 2
+hidden_size: 64
+dropout: 0.2
+learning_rate: 0.001
+batch_size: 128
+epochs: 100
+patience: 10
+horizons_s: [5, 10, 30]

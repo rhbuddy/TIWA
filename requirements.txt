@@ -1,0 +1,11 @@
+# Minimal reproducible simulator, CLI, Gymnasium environment, and plots.
+# Optional heavier ML/RL dependencies are pinned in requirements-ml.txt.
+numpy==1.26.4
+scipy==1.11.4
+PyYAML==6.0.1
+gymnasium==0.29.1
+matplotlib==3.8.2
+pytest==8.3.5
+pytest-cov==5.0.0
+ruff==0.9.10
+mypy==1.14.1

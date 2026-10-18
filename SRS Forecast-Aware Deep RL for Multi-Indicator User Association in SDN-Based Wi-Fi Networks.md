@@ -2,7 +2,7 @@
 
 ## Forecast-Aware Deep Reinforcement Learning for Multi-Indicator User Association in SDN-Based Wi-Fi Networks
 
-**Document version:** 1.0 (Draft) **Date:** 16 October 2026 **Project type:** Final Year Project (FYP) **Based on:** Manzoor et al., "TiWA: Achieving Tetra Indicator Wi-Fi Associations in Software Defined Wi-Fi Networks," IEEE Access, vol. 11, 2023 **Format:** Adapted from IEEE 830 / ISO/IEC/IEEE 29148
+**Document version:** 1.1 (Draft; implementation status addendum) **Date:** 17 October 2026 **Project type:** Final Year Project (FYP) **Based on:** Manzoor et al., "TiWA: Achieving Tetra Indicator Wi-Fi Associations in Software Defined Wi-Fi Networks," IEEE Access, vol. 11, 2023 **Format:** Adapted from IEEE 830 / ISO/IEC/IEEE 29148
 
 ---
 
@@ -56,7 +56,7 @@ The system, referred to as **FA-RLWA** (Forecast-Aware RL Wi-Fi Association), wi
 
 ### 1.5 Document Overview
 
-Section 2 gives an overall description. Section 3 lists specific functional requirements. Section 4 covers external interfaces. Section 5 covers non-functional requirements. Section 6 defines the experimental and verification requirements. Section 7 contains risks, milestones, and deliverables. Sections 8 to 16 give the implementation specification: development environment, simulator model, indicators and baselines, data and forecaster, RL environment and agent, module interfaces, experiment protocol and tests, work breakdown, and the decision log. Section 17 is the traceability matrix and Section 18 the formula appendix.
+Section 2 gives an overall description. Section 3 lists specific functional requirements. Section 4 covers external interfaces. Section 5 covers non-functional requirements. Section 6 defines the experimental and verification requirements. Section 7 contains risks, milestones, and deliverables. Sections 8 to 16 give the implementation specification: development environment, simulator model, indicators and baselines, data and forecaster, RL environment and agent, module interfaces, experiment protocol and tests, work breakdown, and the decision log. Section 17 is the traceability matrix, Section 18 the formula appendix, and Section 19 the dated implementation diff and acceptance-status addendum; Section 19 does not waive or change any normative requirement.
 
 ---
 
@@ -606,6 +606,7 @@ The simulator must reproduce the qualitative and approximate quantitative behavi
 - **Target (Experiment 1, Aspect 1, read approximately from Figure 6(a)):** client-driven about 15 to 16 Mbps, TiWA about 25 Mbps. Acceptance: the simulated ordering matches (TiWA above client-driven) and each value is within 25% of the paper.
 - **Sanity checks:** with one lightly loaded AP in range, throughput equals offered load; throughput never exceeds eta times the highest PHY rate; doubling offered load on a saturated AP does not increase its throughput.
 - **Parameter fitting:** if values differ by more than 25%, adjust only n, tau, and eta, one at a time, and record each change.
+- **Calibration record (17 October 2026; partial, provisional evidence):** Explicit Aspect 1/2 configurations are available in `configs/scenarios/sc1_paper_aspect1.yaml` and `sc1_paper_aspect2.yaml`. Table 2 states 30 Aspect 1 STAs and Figure 3 depicts their positions, but the article does not publish coordinates or explain how the figure's symbols map to all 30 devices. The simulation assumes six clients near the three APs and 24 near an overlap center; those counts/coordinates/spreads are exploratory modeling choices, not paper-reported facts. Holding `n=3.0` and `tau=0.01` fixed, only the SRS-approved model parameter `eta` was changed from `0.6` to `0.2`, with seed 0 used during calibration/exploration. Ten paired random-seed runs 200–209 (1,200 s/run, 60 s warm-up) produced Aspect 1 client-driven throughput `14.146 ± 1.075 Mbps` and original-TiWA throughput `24.814 ± 2.249 Mbps` (mean ± sample SD), with a paired difference of `+10.668 Mbps` (95% paired-bootstrap CI `[9.799, 11.653]`, Holm-adjusted paired Wilcoxon `p=0.043`). Both means fall within 25% of the Figure 6(a) targets and the ordering matches. Because the topology assumption was informed by exploratory outcomes rather than independently reconstructed from Figure 3, this is a numerical checkpoint for the selected model, **not a completed Section 9.8 calibration sign-off**. It does not establish reproduction of all paper metrics, SC2/SC3, or the physical testbed. Protocol, Aspect 2 results, mismatches, and reproduction commands are recorded in `docs/paper-reproduction-results.md`.
 
 ---
 
@@ -1187,6 +1188,42 @@ MAE = mean(|y - y\_hat|), RMSE = sqrt(mean((y - y\_hat)^2)), MAPE = mean(|y - y\
 R\_t = w1 \* T\_norm(t) + w2 \* JFI(t) - w3 \* H(t) - w4 \* Retx(t)
 
 where T\_norm is aggregate throughput normalized by total offered load, H is the handover cost incurred at step t, and Retx is the mean retransmission rate. Initial weights to be tuned: w1 = 1.0, w2 = 0.5, w3 = 0.2, w4 = 0.3.
+
+---
+
+## 19. Implementation Diff and Progress
+
+**Status date:** 17 October 2026. This addendum records the difference between the planned SRS and the repository state at this review checkpoint. A component being implemented or tested is not, by itself, evidence that an acceptance criterion has passed. The requirements in Sections 3–6 remain normative.
+
+### 19.1 Implemented in the Repository
+
+| Area | Work completed | Current scope / evidence |
+| --- | --- | --- |
+| Simulator and monitoring (SIM, MON) | Seeded one-second Python simulator, configurable scenarios, propagation, traffic, mobility, contention, AP/client indicators, and run summaries. AP and STA positions are also logged. New seeded `per_ap`/`overlap` placements support the paper-derived Experiment 1 scenarios. | An approximate Aspect 1 throughput calibration/holdout is documented in `docs/paper-reproduction-results.md`; abstract radio model, secondary-metric mismatches, and real-testbed validation remain open. |
+| Policies and simulated controller (BAS, CTL) | Client-driven, original-interpretation TiWA, corrected TiWA, forecast-aware heuristic, and random policies; simulator controller applies guarded handover/channel actions and records decisions, events, and rejected actions. | This is a simulator control loop, not a production SDN controller or physical-AP integration. |
+| Forecast pipeline (FCT) | Dataset-generation, training, and evaluation entry points; EWMA and moving-average baselines plus optional ARIMA, random-forest, XGBoost, and LSTM implementations. | No trained forecaster artifact or representative held-out SRS results are included. Heavier model dependencies are optional. |
+| RL environment and training (ENV, RLA) | Gymnasium association environment, DQN/PPO trainer entry points, and TensorBoard training-log configuration. | No final checkpoint, multi-seed convergence evidence, or demonstrated policy improvement is included. |
+| Experiment outputs (EXP) | Reproducible CLI runs, CSV traces, resolved configuration, metrics, plots, event/channel logs, and statistical-analysis utilities. Paired reports include bootstrap confidence intervals for policy differences and Holm-adjusted Wilcoxon tests. | Run logs use CSV rather than the Parquet default described in Section 11.1; this deliberate format choice is documented in `docs/design-decisions.md` (DD-10) and is inspectable without an additional engine. |
+| Dashboard and run observability (UI) | Streamlit launcher with progress, live throughput/fairness and per-AP time-series charts, AP/client association map, event timeline, telemetry tables, and artifact downloads. A Linux-only Wi-Fi scan-capability preflight is optional. | The dashboard runs the abstract simulator. The preflight only checks scan capability; scanning is not automatic and the UI does not connect to or control physical APs. This dashboard goes beyond the SRS's optional UI-03. |
+| Emulator validation (Section 14.6) | Separate `validate-mininet` path for a guarded policy loop on a Mininet-WiFi AP/STA topology, with `iw` telemetry and compatible traces. | Static station groups only; mobility/flash-crowd runs are unsupported, the population is capped, and channel changes require explicit opt-in. No live Mininet-WiFi or ns-3 validation has been run. |
+| Portability and quality | Pinned core/UI dependencies, Windows setup instructions, and CI on Ubuntu and Windows. | GitHub Actions run `39050604886` passed on both operating systems for commit `8a22abb`. This review adds simulator/config/report changes after that CI run; current local test and lint results are reported separately and the branch should be rerun through CI. |
+
+### 19.2 Acceptance-Criteria Status
+
+None of AC-01 through AC-08 is signed off as fully passed. AC-01 now has partial evidence for paper Experiment 1, Aspect 1, but its full SC1–SC3 scope remains open. Current evidence and remaining work are:
+
+| Criterion | Status | Evidence / remaining work |
+| --- | --- | --- |
+| AC-01 — qualitative TiWA trends | Partially evidenced; not signed off | The generic default-config comparison remains negative: 10-seed client-driven/TiWA throughput (Mbps) and JFI were SC1 29.6253/0.9997 vs. 29.6243/0.9997, SC2 21.7249/0.9997 vs. 21.7207/0.9997, and SC3 19.7498/0.9997 vs. 19.7491/0.9997. Separately, an exploratory paper-informed Experiment 1 Aspect 1 scenario with outcome-informed topology, `n=3.0` and `tau=0.01` held fixed, changed the SRS-approved parameter `eta` from 0.6 to 0.2 on seed 0; the ten fixed-configuration runs on seeds 200–209 yielded means of 14.146 Mbps client-driven and 24.814 Mbps TiWA. The paired difference is +10.668 Mbps (95% paired-bootstrap CI [9.799, 11.653], Holm-adjusted paired Wilcoxon p=0.043). Numerically, this falls within the Section 9.8 throughput tolerance for that selected simulator scenario, but the outcome-informed topology is not independently reconstructed, so the calibration is provisional and not signed off. Aspect 2 also improves, but its gain is larger than the paper reports. PHY-rate/occupancy mismatches, approximate coordinates and radio model, plus missing SC2/SC3 reproduction mean the paper's complete qualitative result is not yet established. See `docs/paper-reproduction-results.md`. |
+| AC-02 — forecast beats moving average | Not evaluated | The pipeline exists, but a held-out dataset and acceptance comparison have not been completed. |
+| AC-03 — RL convergence and baseline improvement | Not evaluated | Trainer code exists, but convergence across seeds and the required policy comparisons are outstanding. |
+| AC-04 — S6 comparison and confidence intervals | Not completed | The prescribed multi-seed S6/S2/S5 comparison and forecast/no-forecast ablation are outstanding. |
+| AC-05 — densification study | Not completed | The S7 comparison with additional APs has not been completed and discussed. |
+| AC-06 — S6 decision latency | Not demonstrated | A scale benchmark of the final S6 path, including the 10-AP/100-STA case, has not been recorded. |
+| AC-07 — Mininet-WiFi or ns-3 validation | Not demonstrated | The emulator backend is present, but no live emulator or ns-3 run has been performed in the available environment. |
+| AC-08 — reproducible delivery | Partially addressed; not signed off | Source, configs, setup instructions, and CI are present. The complete main experiment set and final report/results are not yet delivered and reproduced from a clean setup. |
+
+The SRS target of at least 70% core-module test coverage has not been met or demonstrated; a previous selected-module coverage run measured 58% overall and 16% for `tiwa.py`. The 100x real-time simulator target and full-scale decision-latency target also remain unverified. The AppTest suite verifies that the live snapshot produces four line charts and a topology graphic and that the completed-run event view produces a timeline; a browser-submitted end-to-end experiment has not been verified.
 
 ---
 

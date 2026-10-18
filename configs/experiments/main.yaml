@@ -1,0 +1,19 @@
+# S1-S6 baselines. RL runs are separated because K_max=5 and K_max=10 agents have
+# different observation sizes; see rl_main.yaml and rl_k10.yaml.
+out: results/main
+scenarios:
+  - configs/scenarios/sc1_steady.yaml
+  - configs/scenarios/sc2_mobile.yaml
+  - configs/scenarios/sc3_shared_channel.yaml
+  - configs/scenarios/sc4_flash_crowd.yaml
+  - configs/scenarios/sc5_mixed.yaml
+  - configs/scenarios/sc6_scaled.yaml
+  - configs/scenarios/sc1_steady_plus1_ap.yaml
+  - configs/scenarios/sc1_steady_plus2_aps.yaml
+policies:
+  - client_driven
+  - tiwa_original
+  - tiwa_fixed
+  - tiwa_forecast
+  - random
+seeds: {start: 200, stop: 220}

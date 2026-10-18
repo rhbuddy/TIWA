@@ -1,0 +1,13 @@
+# Split on independent scenario/seed groups; never split adjacent windows randomly.
+scenarios:
+  train: [configs/scenarios/sc1_steady.yaml, configs/scenarios/sc2_mobile.yaml, configs/scenarios/sc4_flash_crowd.yaml, configs/scenarios/sc5_mixed.yaml]
+  val: [configs/scenarios/sc1_steady.yaml, configs/scenarios/sc2_mobile.yaml, configs/scenarios/sc4_flash_crowd.yaml, configs/scenarios/sc5_mixed.yaml]
+  test_id: [configs/scenarios/sc1_steady.yaml, configs/scenarios/sc2_mobile.yaml, configs/scenarios/sc4_flash_crowd.yaml, configs/scenarios/sc5_mixed.yaml]
+  test_unseen: [configs/scenarios/sc3_shared_channel.yaml, configs/scenarios/sc6_scaled.yaml]
+policies: [client_driven, tiwa_original, random]
+seeds:
+  train: {start: 0, stop: 80}
+  val: {start: 80, stop: 100}
+  test_id: {start: 200, stop: 220}
+  test_unseen: {start: 200, stop: 220}
+sample_every_s: 5

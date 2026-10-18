@@ -1,0 +1,19 @@
+name: sc3_shared_channel
+area_m: [15, 9]
+duration_s: 1200
+warmup_s: 60
+step_s: 1
+channels: [1, 6, 11]
+# AP 0 and AP 1 share channel 1 and are in one carrier-sense neighbourhood.
+aps:
+  - {id: 0, pos: [3.5, 2.7], channel: 1}
+  - {id: 1, pos: [5.5, 7.7], channel: 1}
+  - {id: 2, pos: [11.5, 5.0], channel: 11}
+background_stas:
+  count: 20
+  placement: uniform
+  mobility: static
+  traffic: {type: cbr, mbps: 1.0}
+propagation: {pl0_db: 40, exponent: 3.0, shadow_sigma_db: 4.0, shadow_rho: 0.95, rssi_noise_db: 2.0}
+mac: {efficiency: 0.6, c_max: 0.9, tau: 0.01, retry_limit: 7}
+handover: {mode: lvap, outage_s: 0.2, dwell_s: 10, channel_change_dwell_s: 60, max_moves_per_cycle: 2}

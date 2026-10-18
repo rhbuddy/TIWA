@@ -1,0 +1,7 @@
+policy: tiwa_original
+threshold_mode: spatial
+window: 10
+migration_margin: 0.05
+max_moves_per_cycle: 2
+dwell_s: 10
+channel_reassign_interval_s: 60
